@@ -6,7 +6,7 @@ import plotly.express as px
 # 1. CONFIGURACIÓN Y ESTILO "FINTECH"
 st.set_page_config(page_title="Dashboard Valentina", layout="wide")
 st.markdown("""
-    <style>
+    <style> 
     .stApp { background-color: #0e1117; color: white; }
     .kpi-card {
         background-color: #1a1c24; padding: 20px; border-radius: 12px;
