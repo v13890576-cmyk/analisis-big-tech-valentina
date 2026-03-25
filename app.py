@@ -3,84 +3,84 @@ import yfinance as yf
 import pandas as pd
 import plotly.express as px
 
-# 1. CONFIGURACIÓN Y ESTILO "FINTECH"
-st.set_page_config(page_title="Dashboard Valentina", layout="wide")
+# 1. ESTILO DASHBOARD (Tarjetas y Colores)
+st.set_page_config(page_title="Valentina Analytics", layout="wide")
 st.markdown("""
-    <style> 
+    <style>
     .stApp { background-color: #0e1117; color: white; }
     .kpi-card {
         background-color: #1a1c24; padding: 20px; border-radius: 12px;
-        border: 1px solid #30363d; text-align: center;
+        border: 1px solid #30363d; text-align: center; margin-bottom: 10px;
     }
-    .kpi-price { font-size: 26px; font-weight: bold; color: white; white-space: nowrap; }
-    .delta-up { color: #00ff64; font-size: 14px; }
-    .delta-down { color: #ff3232; font-size: 14px; }
+    .kpi-price { font-size: 24px; font-weight: bold; color: white; white-space: nowrap; }
+    .up { color: #00ff64; font-size: 14px; }
+    .down { color: #ff3232; font-size: 14px; }
     </style>
     """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=600)
 def load_data():
-    t = ['AAPL', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NVDA', 'TSLA']
-    d = yf.download(t, period="10y", progress=False)
-    return d['Close'] if 'Close' in d.columns else d['Adj Close']
+    tickers = ['AAPL', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NVDA', 'TSLA']
+    df = yf.download(tickers, period="10y", progress=False)
+    return df['Close'] if 'Close' in df.columns else df['Adj Close']
 
 data = load_data()
 
-if not data.empty:
+if data is not None and not data.empty:
     st.title("🏛️ Monitor Estratégico de Mercados")
-    st.caption("Valentina | Universidad Externado de Colombia")
+    st.caption("Valentina | Facultad de Administración | Universidad Externado")
 
-    tab1, tab2 = st.tabs(["💰 Precios y Desempeño", "📊 Análisis Estadístico y Retornos"])
+    t1, t2 = st.tabs(["💰 Precios y Costos", "📈 Análisis Estadístico"])
 
-    with tab1:
-        st.subheader("Precios Actuales y Rendimiento (YTD)")
+    with t1:
+        st.subheader("Precios Actuales y Rendimiento")
         cols = st.columns(len(data.columns))
-        h, a = data.iloc[-1], data.iloc[0]
+        precios, ayer = data.iloc[-1], data.iloc[-2]
         
         for i, col in enumerate(cols):
-            ticker = data.columns[i]
-            pct = ((h[ticker] - data.iloc[-252][ticker]) / data.iloc[-252][ticker]) * 100
-            clase = "delta-up" if pct > 0 else "delta-down"
+            tk = data.columns[i]
+            diff = ((precios[tk] - ayer[tk]) / ayer[tk]) * 100
+            clase = "up" if diff > 0 else "down"
             with col:
                 st.markdown(f"""<div class="kpi-card">
-                    <div style="color:gray; font-size:12px;">{ticker}</div>
-                    <div class="kpi-price">${h[ticker]:.2f}</div>
-                    <div class="{clase}">{'↑' if pct > 0 else '↓'} {abs(pct):.1f}% YTD</div>
+                    <div style="color:gray; font-size:12px;">{tk}</div>
+                    <div class="kpi-price">${precios[tk]:,.2f}</div>
+                    <div class="{clase}">{'↑' if diff > 0 else '↓'} {abs(diff):.2f}% Hoy</div>
                 </div>""", unsafe_allow_html=True)
-
+        
         st.markdown("---")
-        st.subheader("📈 Evolución del Costo Histórico")
+        st.subheader("Evolución del Costo de las Acciones")
         st.line_chart(data)
 
-    with tab2:
-        # --- CÁLCULOS DE RETORNOS Y ESTADÍSTICAS ---
+    with t2:
         rets = data.pct_change().dropna()
         
-        # Tabla comparativa de todas las empresas
-        st.subheader("🎯 Comparativa de Medidas de Tendencia y Retorno")
-        
-        stats_data = []
+        # TABLA DE MEDIA, MEDIANA Y MODA DE CADA EMPRESA
+        st.subheader("🎯 Comparativa: Medias, Medianas y Modas")
+        stats = []
         for c in rets.columns:
-            stats_data.append({
+            stats.append({
                 "Empresa": c,
-                "Retorno Promedio (Media)": f"{rets[c].mean():.4%}",
-                "Punto Central (Mediana)": f"{rets[c].median():.4%}",
+                "Retorno Medio (Media)": f"{rets[c].mean():.4%}",
+                "Punto Medio (Mediana)": f"{rets[c].median():.4%}",
                 "Valor Frecuente (Moda)": f"{rets[c].round(4).mode()[0]:.4%}",
-                "Riesgo (Volatilidad)": f"{rets[c].std():.4%}"
+                "Retorno Anualizado": f"{(rets[c].mean() * 252):.2%}"
             })
-        
-        df_stats = pd.DataFrame(stats_data)
-        st.table(df_stats)
+        st.table(pd.DataFrame(stats))
 
-        # --- RECOMENDACIÓN DE INVERSIÓN ---
+        # RECOMENDACIÓN E INVERSIÓN
         st.markdown("---")
-        st.subheader("🏆 Recomendación de Inversión Crítica")
+        efi = (rets.mean() * 252) / (rets.std() * (252**0.5))
+        mejor = efi.idxmax()
         
-        # Cálculo de eficiencia (Sharpe Ratio simplificado)
-        eficiencia = (rets.mean() * 252) / (rets.std() * (252**0.5))
-        mejor_empresa = eficiencia.idxmax()
-        
-        col_rec, col_calc = st.columns([1, 1])
-        
-        with col_rec:
-    
+        c_rec, c_calc = st.columns(2)
+        with c_rec:
+            st.success(f"🏆 **RECOMENDACIÓN:** Invertir en **{mejor}**")
+            st.write(f"Es la opción más eficiente según la relación Riesgo/Retorno de los últimos 10 años.")
+        with c_calc:
+            monto = st.number_input("Inversión (USD):", value=1000)
+            res = monto * (1 + rets[mejor].mean())
+            st.metric(f"Retorno estimado en {mejor}", f"${res:,.2f}")
+
+        st.subheader("🧬 Distribución de Frecuencias")
+        emp_sel = st.selectbox("Ver frecuencias de:", data.columns)
