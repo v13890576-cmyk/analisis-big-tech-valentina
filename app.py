@@ -5,48 +5,68 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-# 1. ESTILO "GERENCIAL PREMIUM"
-st.set_page_config(page_title="Valentina - Big Tech Strategy", layout="wide")
-st.markdown("""
-    <style>
-    .stApp { background-color: #050505; color: white; }
-    .titulo { color: #d4af37; font-family: 'serif'; font-size: 40px; text-align: center; font-weight: bold; border-bottom: 2px solid #d4af37; padding-bottom: 10px; }
-    .stMetric { background-color: #111; padding: 15px; border-radius: 10px; border: 1px solid #333; }
-    .best-card { background-color: #111; padding: 30px; border-radius: 20px; border: 2px solid #d4af37; text-align: center; margin: 20px 0; }
-    </style>
-    """, unsafe_allow_html=True)
+# 1. ESTILO PROFESIONAL
+st.set_page_config(page_title="Valentina - Tech Strategy", layout="wide")
+st.markdown("<style>.stApp{background-color:#050505;color:white;}.titulo{color:#d4af37;text-align:center;font-weight:bold;border-bottom:2px solid #333;}</style>", unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS (10 AÑOS)
+# 2. CARGA DE DATOS ESTABLE
 @st.cache_data(ttl=600)
-def get_data():
+def load_market_data():
     try:
-        tickers = ['AAPL', 'MSFT', 'NVDA', 'META', 'AMZN']
-        df = yf.download(tickers, start=datetime.now()-timedelta(days=3650), progress=False)
+        t = ['AAPL', 'MSFT', 'NVDA', 'META', 'AMZN']
+        df = yf.download(t, start=datetime.now()-timedelta(days=3650), progress=False)
         return df['Close'] if 'Close' in df.columns else df['Adj Close']
-    except:
-        return None
+    except: return None
 
-try:
-    st.markdown('<p class="titulo">ESTRATEGIA FINANCIERA Y ANÁLISIS DE MERCADOS</p>', unsafe_allow_html=True)
-    st.caption("Valentina | Facultad de Administración de Empresas | Universidad Externado de Colombia")
+data = load_market_data()
 
-    data = get_data()
-    if data is None or data.empty:
-        st.error("Error de sincronización con los mercados financieros.")
-        st.stop()
+if data is None or data.empty:
+    st.error("Error de conexión. Refresca la página en 10 segundos.")
+else:
+    st.markdown('<p class="titulo">ESTRATEGIA Y COSTO DE ACCIONES: BIG TECH</p>', unsafe_allow_html=True)
+    st.caption("Valentina | Universidad Externado de Colombia")
 
-    # --- CUADRO DE ESTADO ACTUAL DE LAS ACCIONES ---
-    st.header("🏢 Monitor de Activos (Big Tech)")
-    
-    # Creamos un resumen del estado actual
-    resumen_mercado = []
-    for t in data.columns:
-        precio_actual = data[t].iloc[-1]
-        precio_ayer = data[t].iloc[-2]
-        cambio = precio_actual - precio_ayer
-        pct_cambio = (cambio / precio_ayer) * 100
-        resumen_mercado.append({
-            "Empresa": t,
-            "Precio Actual (USD)": precio_actual,
-            "Variación ($)": cambio,
-            "Variación (%)": pct_camb
+    # --- CUADRO DE EMPRESAS ---
+    st.subheader("🏢 Estado Actual del Mercado")
+    resumen = pd.DataFrame({
+        "Precio USD": data.iloc[-1],
+        "Var Diaria %": data.pct_change().iloc[-1] * 100
+    })
+    st.table(resumen.style.format({'Precio USD': '${:.2f}', 'Var Diaria %': '{:+.2f}%'}))
+
+    # --- LA MEJOR OPCIÓN (CRÍTICA) ---
+    rets_all = data.pct_change().dropna()
+    eficiencia = (rets_all.mean() * 252) / (rets_all.std() * (252**0.5))
+    mejor = eficiencia.idxmax()
+    st.success(f"🏆 **DICTAMEN CRÍTICO:** La mejor opción para tu inversión es **{mejor}** por su alta eficiencia retorno/riesgo.")
+
+    # --- GRÁFICA DE COSTO (PRECIOS) ---
+    st.subheader("📈 Evolución del Costo (10 Años)")
+    st.line_chart(data)
+
+    # --- ANÁLISIS DETALLADO ---
+    st.sidebar.header("Filtros")
+    emp = st.sidebar.selectbox("Seleccione Activo:", data.columns)
+    monto = st.sidebar.number_input("Inversión (USD):", value=1000)
+    r = rets_all[emp]
+
+    t1, t2, t3 = st.tabs(["📋 Frecuencias", "📊 Retornos", "🧬 Estadística"])
+
+    with t1:
+        st.write(f"**Distribución de Probabilidad: {emp}**")
+        bins = [-1, -0.02, -0.005, 0.005, 0.02, 1]
+        labels = ['Caída', 'Baja', 'Estable', 'Subida', 'Salto']
+        f = pd.cut(r, bins=bins, labels=labels).value_counts().reset_index()
+        f.columns = ['Escenario', 'Días']; f['%'] = (f['Días']/len(r))*100
+        st.table(f.style.format({'%': '{:.2f}%'}))
+
+    with t2:
+        st.plotly_chart(px.line(r, title="Volatilidad Diaria (Retornos)", color_discrete_sequence=['#d4af37']).update_layout(plot_bgcolor='#050505', paper_bgcolor='#050505', font_color="white"))
+        fig_b = go.Figure().add_trace(go.Box(y=r, name=emp, marker_color='#d4af37', boxpoints='outliers'))
+        st.plotly_chart(fig_b.update_layout(plot_bgcolor='#050505', paper_bgcolor='#050505', font_color="white", title="Boxplot de Riesgo"))
+
+    with t3:
+        c1, c2, c3 = st.columns(3)
+        c1.metric("MEDIA", f"{r.mean():.4%}")
+        c2.metric("MEDIANA", f"{r.median():.4%}")
+        c3.metric("
