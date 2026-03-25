@@ -5,67 +5,54 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-# 1. ESTILO Y CONFIGURACIÓN
-st.set_page_config(page_title="Valentina - Análisis Crítico", layout="wide")
-st.markdown("<style>.stApp { background-color: #050505; color: white; }</style>", unsafe_allow_html=True)
+# 1. CONFIGURACIÓN Y ESTILO
+st.set_page_config(page_title="Valentina - Decisión Tech", layout="wide")
 
-# 2. CARGA DE DATOS SEGURO
+st.markdown("""
+    <style>
+    .stApp { background-color: #050505; color: white; }
+    .titulo { color: #d4af37; font-size: 35px; text-align: center; font-weight: bold; border-bottom: 2px solid #333; }
+    .best-card { background-color: #111; padding: 20px; border-radius: 15px; border: 2px solid #d4af37; text-align: center; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# 2. CARGA DE DATOS (10 AÑOS)
 @st.cache_data(ttl=600)
-def load_data():
-    try:
-        tickers = ['AAPL', 'MSFT', 'NVDA', 'META', 'AMZN']
-        df = yf.download(tickers, start=datetime.now()-timedelta(days=3650), progress=False)
-        return df['Close'] if 'Close' in df.columns else df['Adj Close']
-    except:
-        return None
+def get_all_data():
+    tickers = ['AAPL', 'MSFT', 'NVDA', 'META', 'AMZN']
+    df = yf.download(tickers, start=datetime.now()-timedelta(days=3650), progress=False)
+    return df['Close'] if 'Close' in df.columns else df['Adj Close']
 
-# 3. CUERPO DE LA APLICACIÓN
-data = load_data()
+try:
+    st.markdown('<p class="titulo">ANÁLISIS CRÍTICO Y RECOMENDACIÓN GERENCIAL</p>', unsafe_allow_html=True)
+    st.caption("Valentina | Facultad de Administración | Universidad Externado de Colombia")
 
-if data is None or data.empty:
-    st.error("Error de conexión con Yahoo Finance. Revisa tu archivo requirements.txt")
-else:
-    st.title("⚖️ CRÍTICA ESTRATÉGICA: BIG TECH")
-    st.caption("Valentina | Universidad Externado de Colombia")
+    data = get_all_data()
     
-    empresa = st.sidebar.selectbox("Seleccione Acción:", data.columns)
-    monto = st.sidebar.number_input("Capital a invertir (USD):", value=1000)
+    if data is None:
+        st.error("Error al conectar con los datos financieros.")
+        st.stop()
+
+    # --- LÓGICA DE LA MEJOR OPCIÓN ---
+    all_rets = data.pct_change().dropna()
+    eficiencias = (all_rets.mean() * 252) / (all_rets.std() * (252**0.5))
+    mejor_ticker = eficiencias.idxmax()
     
-    # ESTADÍSTICAS (Media, Mediana, Moda)
-    rets = data[empresa].pct_change().dropna()
+    st.markdown("### 🏆 Dictamen: ¿Cuál es la mejor opción?")
+    col_a, col_b = st.columns([1.5, 1])
     
-    st.subheader(f"📊 Estadísticas de Retorno: {empresa}")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("MEDIA (Promedio)", f"{rets.mean():.4%}")
-    col2.metric("MEDIANA", f"{rets.median():.4%}")
-    col3.metric("MODA", f"{rets.round(4).mode()[0]:.4%}")
+    with col_a:
+        fig_rank = px.bar(eficiencias, color=eficiencias.values, 
+                          labels={'value': 'Ratio de Eficiencia', 'index': 'Empresa'},
+                          title="Comparativo: Retorno por cada unidad de Riesgo",
+                          color_continuous_scale='Gold')
+        fig_rank.update_layout(plot_bgcolor='#050505', paper_bgcolor='#050505', font_color="white")
+        st.plotly_chart(fig_rank, use_container_width=True)
 
-    # JUICIO CRÍTICO DE INVERSIÓN
-    st.markdown("---")
-    volatilidad = rets.std() * (252**0.5)
-    retorno_anual = rets.mean() * 252
-    eficiencia = retorno_anual / volatilidad
-
-    st.subheader("🎯 Mi Recomendación Crítica")
-    if eficiencia > 0.7:
-        st.success(f"**¡ES BUENA OPCIÓN!** {empresa} tiene un historial sólido. Con tus ${monto:,.0f}, la probabilidad de éxito es alta debido a su eficiencia histórica.")
-    elif eficiencia > 0.4:
-        st.warning(f"**OPCIÓN MODERADA.** Es aceptable, pero la volatilidad es alta. Solo invierte tus ${monto:,.0f} si no los necesitas a corto plazo.")
-    else:
-        st.error(f"**¡NO RECOMENDADO!** El riesgo de {empresa} supera al beneficio. Podrías perder gran parte de tu capital rápidamente.")
-
-    # GRÁFICAS (Boxplot mejorado)
-    t1, t2 = st.tabs(["🧬 Riesgo (Boxplot)", "📈 Evolución"])
-    
-    with t1:
-        # Boxplot con puntos individuales (Outliers)
-        fig_box = go.Figure()
-        fig_box.add_trace(go.Box(y=rets, name=empresa, marker_color='#d4af37', boxpoints='outliers'))
-        fig_box.update_layout(plot_bgcolor='#050505', paper_bgcolor='#050505', font_color="white", title="Dispersión y Días de Crisis (Outliers)")
-        st.plotly_chart(fig_box, use_container_width=True)
-        st.info("Los puntos fuera de la caja son los 'días de pánico' o ganancias extremas.")
-
-    with t2:
-        fig_line = px.line(data[empresa], title=f"Precio Histórico: {empresa}", color_discrete_sequence=['#d4af37'])
-        fig_line.update_layout(plot_bgcolor='#050505', paper_bgcolor='#050505', font_color="white")
-        st.plotly_chart(fig_line, use_container_width=True)
+    with col_b:
+        st.markdown(f"""
+            <div class="best-card">
+                <h2 style="color: #d4af37;">RECOMENDACIÓN FINAL</h2>
+                <h1 style="font-size: 50px;">{mejor_ticker}</h1>
+                <p>Basado en 10 años de datos, <b>{mejor_ticker}</b> ofrece el mejor equilibrio entre ganancias y estabilidad.</p>
+                <p style
