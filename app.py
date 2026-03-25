@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 import plotly.express as px
 
-# 1. CONFIGURACIÓN
+# 1. CONFIGURACIÓN INICIAL
 st.set_page_config(page_title="Análisis Valentina", layout="wide")
 st.markdown("<style>.stApp{background-color:#050505;color:white;}</style>", unsafe_allow_html=True)
 
@@ -13,46 +13,50 @@ def load_data():
     d = yf.download(t, period="10y", progress=False)
     return d['Close'] if 'Close' in d.columns else d['Adj Close']
 
-# 2. CUERPO DE LA APP
-st.title("📈 ESTRATEGIA Y COSTO DE ACCIONES")
+# 2. CUERPO PRINCIPAL
+st.title("📈 ESTRATEGIA Y MONITOREO DE ACCIONES")
 data = load_data()
 
 if data is not None and not data.empty:
-    # --- CUADRO DE EMPRESAS Y COSTO ---
-    st.subheader("🏢 Monitoreo de Precios Actuales")
-    resumen = pd.DataFrame({"Precio Actual (USD)": data.iloc[-1]})
-    st.table(resumen.style.format("${:.2f}"))
+    # --- CUADRO DE EMPRESAS CON FLECHAS ---
+    st.subheader("🏢 Estado Actual del Mercado")
     
-    st.subheader("📊 Gráfica de Costo Histórico")
-    st.line_chart(data)
+    precios_hoy = data.iloc[-1]
+    precios_ayer = data.iloc[-2]
+    
+    resumen_data = []
+    for ticker in data.columns:
+        actual = precios_hoy[ticker]
+        anterior = precios_ayer[ticker]
+        diff = actual - anterior
+        # Lógica de flechas
+        icono = "🔺" if diff > 0 else "🔻"
+        color = "green" if diff > 0 else "red"
+        resumen_data.append({
+            "Empresa": ticker,
+            "Precio USD": f"${actual:.2f}",
+            "Tendencia": f"{icono}",
+            "Cambio": diff
+        })
+    
+    df_resumen = pd.DataFrame(resumen_data)
+    # Aplicar color a la flecha
+    st.table(df_resumen.style.apply(lambda x: ["color: white", "color: white", f"color: {'green' if x['Cambio'] > 0 else 'red'}", "display: none"], axis=1))
 
-    # --- LÓGICA DE INVERSIÓN ---
+    # --- RECOMENDACIÓN CRÍTICA ---
     rets = data.pct_change().dropna()
     eficiencia = (rets.mean() * 252) / (rets.std() * (252**0.5))
     mejor = eficiencia.idxmax()
-    
-    st.success(f"🏆 **DICTAMEN CRÍTICO:** La mejor opción para invertir es **{mejor}** por su relación retorno/riesgo.")
+    st.success(f"🏆 **LA MEJOR OPCIÓN:** Invertir en **{mejor}** es la decisión más eficiente hoy.")
 
-    # --- ANÁLISIS POR EMPRESA ---
+    # --- TABLA DE FRECUENCIAS CORREGIDA ---
+    st.markdown("---")
     emp = st.sidebar.selectbox("Seleccione Acción:", data.columns)
     r_emp = rets[emp]
     
+    st.subheader(f"📊 Análisis Detallado: {emp}")
     col1, col2 = st.columns(2)
-    with col1:
-        st.write(f"**Tabla de Frecuencias: {emp}**")
-        bins = [-1, -0.02, -0.005, 0.005, 0.02, 1]
-        frec = pd.cut(r_emp, bins=bins).value_counts().reset_index()
-        frec.columns = ['Rango de Retorno', 'Días']
-        st.table(frec)
     
-    with col2:
-        st.write("**Estadísticas de Tendencia**")
-        st.metric("MEDIA", f"{r_emp.mean():.4%}")
-        st.metric("MEDIANA", f"{r_emp.median():.4%}")
-        st.metric("MODA", f"{r_emp.round(4).mode()[0]:.4%}")
-
-    # --- GRÁFICA DE RETORNOS ---
-    st.subheader(f"🧬 Volatilidad Diaria (Retornos) de {emp}")
-    st.plotly_chart(px.line(r_emp, color_discrete_sequence=['#d4af37']).update_layout(plot_bgcolor='black', paper_bgcolor='black', font_color='white'))
-else:
-    st.error("Error al conectar con Yahoo Finance. Intenta refrescar.")
+    with col1:
+        st.write("**Tabla de Frecuencias (Rangos)**")
+        bins = [-1, -0.02, -0.005, 0.005, 0.02, 1]
