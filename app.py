@@ -2,120 +2,101 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-# 1. CONFIGURACIÓN VISUAL MEJORADA
-st.set_page_config(page_title="Análisis Big Tech - Valentina", layout="wide")
+# 1. ESTILO VISUAL (CORREGIDO PARA VISIBILIDAD)
+st.set_page_config(page_title="Big Tech - Valentina", layout="wide")
 
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital@1&family=Inter:wght@400;600&display=swap');
-    
-    .stApp { background-color: #fdfdfd; font-family: 'Inter', sans-serif; }
-    
-    /* TITULO VISIBLE: Color gris oscuro/negro */
-    .titulo-principal {
-        font-family: 'Libre Baskerville', serif;
+    .stApp { background-color: #fdfdfd; }
+    /* Título en color negro pizarra para que sea legible */
+    .titulo-v {
         color: #1e293b;
-        font-size: 2.5rem;
+        font-family: 'Serif';
+        font-size: 32px;
         font-weight: bold;
-        margin-bottom: 0px;
     }
-
-    .report-card {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid #e2e8f0;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
-    }
-    
     [data-testid="stMetricValue"] { color: #c2410c !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS CORREGIDA
+# 2. FUNCIÓN DE DATOS REFORZADA
 tickers = ['AAPL', 'MSFT', 'NVDA', 'META', 'AMZN']
 
 @st.cache_data(ttl=3600)
 def load_data():
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=10*365)
-    # Descargamos los datos y nos aseguramos de que los nombres sean simples
-    data = yf.download(tickers, start=start_date, end=end_date, progress=False)
+    end = datetime.now()
+    start = end - timedelta(days=10*365)
+    # Descargamos los datos
+    df = yf.download(tickers, start=start, end=end, progress=False)
     
-    # Si los datos tienen columnas multinivel (sucede a veces con yfinance), las limpiamos
-    if isinstance(data.columns, pd.MultiIndex):
-        data = data['Adj Close']
-    else:
-        data = data['Adj Close']
-    return data
+    # LIMPIEZA CRÍTICA: Esto evita el error 'Adj Close'
+    if 'Adj Close' in df.columns:
+        df = df['Adj Close']
+    elif 'Close' in df.columns:
+        df = df['Close']
+    
+    # Si las columnas tienen niveles extra, los aplanamos
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(-1)
+        
+    return df
 
+# 3. INTERFAZ
 try:
-    # Título manual para asegurar visibilidad
-    st.markdown('<p class="titulo-principal">🏛️ ANÁLISIS ESTRATÉGICO DE ACCIONES BIG TECH</p>', unsafe_allow_html=True)
-    st.caption("Valentina | Facultad de Administración | Universidad Externado de Colombia")
+    st.markdown('<p class="titulo-v">🏛️ ANÁLISIS ESTRATÉGICO DE ACCIONES BIG TECH</p>', unsafe_allow_html=True)
+    st.caption("Valentina | Universidad Externado de Colombia | Facultad de Administración")
     st.markdown("---")
 
-    df_precios = load_data()
+    data = load_data()
     
-    # Verificación de que los datos no estén vacíos
-    if df_precios.empty:
-        st.error("No se pudieron obtener datos. Intenta recargar la página.")
+    if data.empty:
+        st.warning("Cargando datos... por favor refresca la página en un momento.")
     else:
-        df_retornos = df_precios.pct_change().dropna()
+        # Selector lateral
+        empresa = st.sidebar.selectbox("Selecciona una Empresa:", tickers)
+        
+        # Pestañas
+        t1, t2, t3 = st.tabs(["📈 Histórico (10 años)", "📊 Retornos", "🎯 Indicadores"])
 
-        # Selector
-        empresa = st.sidebar.selectbox("Seleccione una empresa:", tickers)
+        with t1:
+            st.subheader(f"Evolución del Precio: {empresa}")
+            fig1 = px.line(data, y=empresa, color_discrete_sequence=['#c2410c'])
+            fig1.update_layout(plot_bgcolor='white', xaxis_title="Año", yaxis_title="Precio (USD)")
+            st.plotly_chart(fig1, use_container_width=True)
 
-        tabs = st.tabs(["📈 Evolución 10 Años", "📊 Retornos y Frecuencias", "🎯 KPIs de Desempeño"])
+        with t2:
+            col_a, col_b = st.columns([1.5, 1])
+            rets = data[empresa].pct_change().dropna()
+            
+            with col_a:
+                st.subheader("Volatilidad Diaria")
+                fig2 = px.area(rets, color_discrete_sequence=['#475569'])
+                st.plotly_chart(fig2, use_container_width=True)
+            
+            with col_b:
+                st.subheader("Tabla de Frecuencias")
+                bins = [-1, -0.02, 0, 0.02, 1]
+                labs = ['Baja', 'Leve Neg.', 'Leve Pos.', 'Alta']
+                df_f = pd.cut(rets, bins=bins, labels=labs).value_counts().reset_index()
+                df_f.columns = ['Rango', 'Días']
+                st.table(df_f)
 
-        # --- TAB 1: PRECIOS ---
-        with tabs[0]:
-            st.subheader(f"Precio Histórico de {empresa}")
-            fig_precio = px.line(df_precios, y=empresa, color_discrete_sequence=['#c2410c'])
-            fig_precio.update_layout(plot_bgcolor='rgba(0,0,0,0)', xaxis_title="Fecha", yaxis_title="Precio USD")
-            st.plotly_chart(fig_precio, use_container_width=True)
-
-        # --- TAB 2: RETORNOS ---
-        with tabs[1]:
-            c1, c2 = st.columns([1.5, 1])
-            with c1:
-                st.subheader("Gráfico de Volatilidad")
-                fig_ret = px.area(df_retornos, y=empresa, color_discrete_sequence=['#475569'])
-                st.plotly_chart(fig_ret, use_container_width=True)
-            with c2:
-                st.subheader("Frecuencia de Movimientos")
-                bins = [-1, -0.05, -0.02, 0, 0.02, 0.05, 1]
-                labels = ['Caída Fuerte', 'Caída Moderada', 'Leve Neg.', 'Leve Pos.', 'Subida Moderada', 'Subida Fuerte']
-                frec = pd.cut(df_retornos[empresa], bins=bins, labels=labels).value_counts().sort_index()
-                df_frec = pd.DataFrame({'Rango': frec.index, 'Días': frec.values})
-                st.table(df_frec)
-
-        # --- TAB 3: KPIs ---
-        with tabs[2]:
-            st.subheader("Indicadores de Gestión Estratégica")
+        with t3:
+            st.subheader("Desempeño Gerencial")
             m1, m2, m3 = st.columns(3)
             
-            # Cálculos
-            total_ret = (df_precios[empresa].iloc[-1] / df_precios[empresa].iloc[0] - 1) * 100
-            volatilidad = df_retornos[empresa].std() * (252**0.5) * 100
-            ultimo_p = df_precios[empresa].iloc[-1]
-
-            m1.metric("Rendimiento Total (10A)", f"{total_ret:.1f}%")
-            m2.metric("Volatilidad Anual", f"{volatilidad:.1f}%")
-            m3.metric("Último Precio", f"${ultimo_p:.2f}")
-
-            # Gráfico de barras comparativo al final
+            rend_tot = (data[empresa].iloc[-1] / data[empresa].iloc[0] - 1) * 100
+            m1.metric("Rendimiento 10A", f"{rend_tot:.1f}%")
+            m2.metric("Precio Actual", f"${data[empresa].iloc[-1]:.2f}")
+            m3.metric("Empresa", empresa)
+            
             st.markdown("---")
-            st.subheader("Comparativo de Crecimiento: Todas las empresas")
-            rendimientos = ((df_precios.iloc[-1] / df_precios.iloc[0]) - 1) * 100
-            fig_barras = px.bar(rendimientos, color=rendimientos.values, color_continuous_scale='Oranges')
-            st.plotly_chart(fig_barras, use_container_width=True)
-
-    st.markdown("---")
-    st.caption("© 2026 Valentina - Reporte Generencial")
+            st.subheader("Comparativa de Crecimiento Total")
+            comp = ((data.iloc[-1] / data.iloc[0]) - 1) * 100
+            fig3 = px.bar(comp, color=comp.values, color_continuous_scale='Oranges')
+            st.plotly_chart(fig3, use_container_width=True)
 
 except Exception as e:
-    st.error(f"Error detectado: {e}. Por favor revisa que el archivo 'requirements.txt' esté correcto.")
+    st.error(f"Error técnico: {e}. Revisa que 'requirements.txt' esté correcto.")
