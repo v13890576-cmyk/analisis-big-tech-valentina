@@ -55,7 +55,7 @@ if data is not None and not data.empty:
     with t2:
         rets = data.pct_change().dropna()
         
-        # TABLA DE MEDIA, MEDIANA Y MODA DE CADA EMPRESA
+        # TABLA DE MEDIA, MEDIANA Y MODA
         st.subheader("🎯 Comparativa: Medias, Medianas y Modas")
         stats = []
         for c in rets.columns:
@@ -63,24 +63,23 @@ if data is not None and not data.empty:
                 "Empresa": c,
                 "Retorno Medio (Media)": f"{rets[c].mean():.4%}",
                 "Punto Medio (Mediana)": f"{rets[c].median():.4%}",
-                "Valor Frecuente (Moda)": f"{rets[c].round(4).mode()[0]:.4%}",
-                "Retorno Anualizado": f"{(rets[c].mean() * 252):.2%}"
+                "Valor Frecuente (Moda)": f"{rets[c].round(4).mode()[0]:.4%}"
             })
         st.table(pd.DataFrame(stats))
+
+        # NUEVA GRÁFICA DE RETORNOS POR EMPRESA
+        st.markdown("---")
+        st.subheader("📊 Gráfica de Retornos Históricos")
+        emp_sel = st.selectbox("Seleccione empresa para ver sus retornos:", data.columns)
+        
+        fig_rets = px.line(rets[emp_sel], 
+                          labels={'value': 'Cambio Diario %', 'Date': 'Fecha'},
+                          title=f"Volatilidad de Retornos: {emp_sel}",
+                          color_discrete_sequence=['#00ff64'])
+        fig_rets.update_layout(plot_bgcolor='#1a1c24', paper_bgcolor='#0e1117', font_color='white')
+        st.plotly_chart(fig_rets, use_container_width=True)
 
         # RECOMENDACIÓN E INVERSIÓN
         st.markdown("---")
         efi = (rets.mean() * 252) / (rets.std() * (252**0.5))
         mejor = efi.idxmax()
-        
-        c_rec, c_calc = st.columns(2)
-        with c_rec:
-            st.success(f"🏆 **RECOMENDACIÓN:** Invertir en **{mejor}**")
-            st.write(f"Es la opción más eficiente según la relación Riesgo/Retorno de los últimos 10 años.")
-        with c_calc:
-            monto = st.number_input("Inversión (USD):", value=1000)
-            res = monto * (1 + rets[mejor].mean())
-            st.metric(f"Retorno estimado en {mejor}", f"${res:,.2f}")
-
-        st.subheader("🧬 Distribución de Frecuencias")
-        emp_sel = st.selectbox("Ver frecuencias de:", data.columns)
