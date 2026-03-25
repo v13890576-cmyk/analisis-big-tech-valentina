@@ -3,80 +3,59 @@ import yfinance as yf
 import pandas as pd
 import plotly.express as px
 
-# 1. ESTILO Y CONFIGURACIÓN
+# 1. CONFIGURACIÓN GENERAL Y ESTILO "DARK DASHBOARD"
 st.set_page_config(page_title="Dashboard Valentina", layout="wide")
+
 st.markdown("""
     <style>
+    /* Estilo para las tarjetas de KPI */
     .stApp { background-color: #0e1117; color: white; }
+    .kpi-container { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 25px; }
     .kpi-card {
-        background-color: #1a1c24; padding: 20px; border-radius: 12px;
-        border: 1px solid #30363d; text-align: center; margin-bottom: 10px;
+        background-color: #1a1c24;
+        padding: 20px 15px;
+        border-radius: 12px;
+        border: 1px solid #30363d;
+        flex: 1;
+        min-width: 150px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-    .kpi-price { font-size: 24px; font-weight: bold; color: white; white-space: nowrap; }
-    .up { color: #00ff64; } .down { color: #ff3232; }
+    .kpi-card div:first-child { color: #8b949e; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
+    .kpi-card div:nth-child(2) { color: #8b949e; font-size: 13px; margin-bottom: 5px; }
+    .kpi-card div:nth-child(3) { 
+        color: white; 
+        font-size: 26px; /* Precio completo en una sola línea */
+        font-weight: bold; 
+        margin: 5px 0; 
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .kpi-val { font-size: 14px; border-radius: 5px; padding: 2px 8px; font-weight: bold;}
+    .delta-up { background-color: rgba(0,255,100,0.1); color: #00ff64; }
+    .delta-down { background-color: rgba(255,50,50,0.1); color: #ff3232; }
     </style>
     """, unsafe_allow_html=True)
 
+# 2. CARGA DE DATOS (10 AÑOS - DATOS VERÍDICOS)
 @st.cache_data(ttl=600)
 def load_data():
-    tickers = ['AAPL', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NVDA']
-    df = yf.download(tickers, period="10y", progress=False)
-    return df['Close'] if 'Close' in df.columns else df['Adj Close']
+    t = ['AAPL', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NVDA', 'TSLA']
+    try:
+        # Descarga de datos
+        df = yf.download(t, period="10y", progress=False)
+        return df['Close'] if 'Close' in df.columns else df['Adj Close']
+    except Exception as e:
+        return pd.DataFrame() # Retorna DF vacío en caso de error
 
 data = load_data()
 
-if data is not None and not data.empty:
-    st.title("🏛️ Monitor Estratégico de Mercados")
-    st.caption("Valentina | Facultad de Administración | Universidad Externado")
+# Lógica principal solo si hay datos
+if not data.empty:
+    st.markdown('<p style="color:white; font-size:32px; font-weight:bold; margin-bottom:20px;">Precios Actuales y Rendimiento</p>', unsafe_allow_html=True)
 
-    t1, t2 = st.tabs(["💰 Precios y Retornos", "📊 Análisis Estadístico"])
-
-    with t1:
-        # TARJETAS DE PRECIOS
-        cols = st.columns(len(data.columns))
-        precios, ayer = data.iloc[-1], data.iloc[-2]
-        for i, col in enumerate(cols):
-            tk = data.columns[i]
-            diff = ((precios[tk] - ayer[tk]) / ayer[tk]) * 100
-            clase = "up" if diff > 0 else "down"
-            with col:
-                st.markdown(f'<div class="kpi-card"><div style="color:gray;font-size:12px;">{tk}</div><div class="kpi-price">${precios[tk]:,.2f}</div><div class="{clase}">{"↑" if diff > 0 else "↓"} {abs(diff):.2f}% Hoy</div></div>', unsafe_allow_html=True)
-        
-        st.markdown("---")
-        emp_p = st.selectbox("Seleccione empresa para ver Retornos:", data.columns)
-        rets = data.pct_change().dropna()
-        fig = px.line(rets[emp_p], title=f"Volatilidad Diaria: {emp_p}", labels={'value':'%','Date':'Fecha'}, color_discrete_sequence=['#00ff64'])
-        fig.update_layout(plot_bgcolor='#1a1c24', paper_bgcolor='#0e1117', font_color='white')
-        st.plotly_chart(fig, use_container_width=True)
-
-    with t2:
-        # TABLA DE ESTADÍSTICAS
-        st.subheader("🎯 Comparativa: Media, Mediana y Moda")
-        stats = []
-        for c in rets.columns:
-            stats.append({"Empresa": c, "Media": f"{rets[c].mean():.4%}", "Mediana": f"{rets[c].median():.4%}", "Moda": f"{rets[c].round(4).mode()[0]:.4%}"})
-        st.table(pd.DataFrame(stats))
-
-        # --- CALCULADORA UNIVERSAL POR TIEMPO ---
-        st.markdown("---")
-        st.subheader("💵 Calculadora de Inversión Proyectada")
-        c1, c2 = st.columns([1, 2])
-        
-        with c1:
-            monto = st.number_input("Monto a invertir (USD):", value=2000, step=100)
-            emp_calc = st.selectbox("Empresa para calcular:", data.columns)
-        
-        with c2:
-            m = rets[emp_calc].mean()
-            r_dia = monto * (1 + m)
-            r_mes = monto * (1 + m)**21
-            r_año = monto * (1 + m)**252
-            
-            res1, res2, res3 = st.columns(3)
-            res1.metric("En 1 Día", f"${r_dia:,.2f}")
-            res2.metric("En 1 Mes", f"${r_mes:,.2f}")
-            res3.metric("En 1 Año", f"${r_año:,.2f}")
-        
-        st.success(f"🏆 **Nota:** La proyección anual de **{emp_calc}** usa el interés compuesto basado en su media histórica de 10 años.")
-else:
-    st.error("Error al cargar datos.")
+    # Obtenemos los últimos datos y los de hace un año (simulación YTD)
+    try:
+        current_data = data.iloc[-1]
+        last_year_data = data.iloc[-252] # Datos de aprox.
