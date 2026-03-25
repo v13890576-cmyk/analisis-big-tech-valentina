@@ -3,8 +3,8 @@ import yfinance as yf
 import pandas as pd
 import plotly.express as px
 
-# 1. ESTILO DASHBOARD (Tarjetas y Colores)
-st.set_page_config(page_title="Valentina Analytics", layout="wide")
+# 1. CONFIGURACIÓN Y ESTILO
+st.set_page_config(page_title="Dashboard Valentina", layout="wide")
 st.markdown("""
     <style>
     .stApp { background-color: #0e1117; color: white; }
@@ -20,7 +20,8 @@ st.markdown("""
 
 @st.cache_data(ttl=600)
 def load_data():
-    tickers = ['AAPL', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NVDA', 'TSLA']
+    # Eliminamos TSLA de la lista
+    tickers = ['AAPL', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NVDA']
     df = yf.download(tickers, period="10y", progress=False)
     return df['Close'] if 'Close' in df.columns else df['Adj Close']
 
@@ -30,7 +31,8 @@ if data is not None and not data.empty:
     st.title("🏛️ Monitor Estratégico de Mercados")
     st.caption("Valentina | Facultad de Administración | Universidad Externado")
 
-    t1, t2 = st.tabs(["💰 Precios y Costos", "📈 Análisis Estadístico"])
+    # PESTAÑAS
+    t1, t2 = st.tabs(["💰 Precios y Retornos", "📊 Análisis Estadístico"])
 
     with t1:
         st.subheader("Precios Actuales y Rendimiento")
@@ -49,14 +51,27 @@ if data is not None and not data.empty:
                 </div>""", unsafe_allow_html=True)
         
         st.markdown("---")
-        st.subheader("Evolución del Costo de las Acciones")
+        
+        # SELECTOR EN LA PÁGINA PRINCIPAL
+        col_select, col_empty = st.columns([1, 2])
+        with col_select:
+            emp_principal = st.selectbox("Seleccione empresa para ver Retornos:", data.columns)
+        
+        # GRÁFICA DE RETORNOS EN PÁGINA PRINCIPAL
+        rets = data.pct_change().dropna()
+        fig_rets = px.line(rets[emp_principal], 
+                          title=f"Volatilidad de Retornos Diarios: {emp_principal}",
+                          labels={'value': 'Cambio %', 'Date': 'Fecha'},
+                          color_discrete_sequence=['#00ff64'])
+        fig_rets.update_layout(plot_bgcolor='#1a1c24', paper_bgcolor='#0e1117', font_color='white')
+        st.plotly_chart(fig_rets, use_container_width=True)
+        
+        st.subheader("Evolución Histórica de Precios (Costo)")
         st.line_chart(data)
 
     with t2:
-        rets = data.pct_change().dropna()
-        
         # TABLA DE MEDIA, MEDIANA Y MODA
-        st.subheader("🎯 Comparativa: Medias, Medianas y Modas")
+        st.subheader("🎯 Comparativa Estadística Total")
         stats = []
         for c in rets.columns:
             stats.append({
@@ -67,19 +82,19 @@ if data is not None and not data.empty:
             })
         st.table(pd.DataFrame(stats))
 
-        # NUEVA GRÁFICA DE RETORNOS POR EMPRESA
-        st.markdown("---")
-        st.subheader("📊 Gráfica de Retornos Históricos")
-        emp_sel = st.selectbox("Seleccione empresa para ver sus retornos:", data.columns)
-        
-        fig_rets = px.line(rets[emp_sel], 
-                          labels={'value': 'Cambio Diario %', 'Date': 'Fecha'},
-                          title=f"Volatilidad de Retornos: {emp_sel}",
-                          color_discrete_sequence=['#00ff64'])
-        fig_rets.update_layout(plot_bgcolor='#1a1c24', paper_bgcolor='#0e1117', font_color='white')
-        st.plotly_chart(fig_rets, use_container_width=True)
-
         # RECOMENDACIÓN E INVERSIÓN
         st.markdown("---")
         efi = (rets.mean() * 252) / (rets.std() * (252**0.5))
         mejor = efi.idxmax()
+        
+        c_rec, c_calc = st.columns(2)
+        with c_rec:
+            st.success(f"🏆 **RECOMENDACIÓN:** Invertir en **{mejor}**")
+            st.write("Seleccionada por su alta eficiencia retorno/riesgo en 10 años.")
+        with c_calc:
+            monto = st.number_input("Inversión Estimada (USD):", value=1000)
+            res = monto * (1 + rets[mejor].mean())
+            st.metric(f"Proyección en {mejor}", f"${res:,.2f}")
+
+else:
+    st.error("Error de conexión. Intente refrescar la página.")
