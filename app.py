@@ -2,25 +2,27 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
-# 1. ESTILO "DARK ACADEMIC" PROFESIONAL
-st.set_page_config(page_title="Valentina - Estrategia Financiera", layout="wide")
+# 1. ESTILO "DARK ACADEMIC" DE ALTO NIVEL
+st.set_page_config(page_title="Valentina - Critical Investment Analysis", layout="wide")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; color: #ffffff; }
-    .titulo-v { color: #d4af37; font-family: 'Serif'; font-size: 35px; text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
-    [data-testid="stMetricValue"] { color: #d4af37 !important; font-family: monospace; }
-    .recomendacion-card { background-color: #1c1f26; padding: 20px; border-radius: 10px; border-left: 5px solid #d4af37; margin: 10px 0; }
+    .stApp { background-color: #050505; color: #ffffff; }
+    .titulo-v { color: #d4af37; font-family: 'Playfair Display', serif; font-size: 38px; text-align: center; border-bottom: 2px solid #d4af37; padding-bottom: 15px; }
+    .stMetric { background-color: #111; padding: 15px; border-radius: 10px; border: 1px solid #333; }
+    [data-testid="stMetricValue"] { color: #d4af37 !important; }
+    .critica-card { padding: 25px; border-radius: 15px; border: 2px solid; margin: 20px 0; font-size: 18px; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS ESTABLE
+# 2. CARGA DE DATOS (YAHOO FINANCE VERÍDICO)
 tickers = ['AAPL', 'MSFT', 'NVDA', 'META', 'AMZN']
 
 @st.cache_data(ttl=600)
-def load_data_v():
+def load_data_critical():
     end = datetime.now()
     start = end - timedelta(days=10*365)
     df = yf.download(tickers, start=start, end=end, progress=False, threads=False)
@@ -31,85 +33,58 @@ def load_data_v():
     return df
 
 try:
-    st.markdown('<p class="titulo-v">ANÁLISIS ESTRATÉGICO: VALENTINA</p>', unsafe_allow_html=True)
-    
-    data = load_data_v()
-    
+    st.markdown('<p class="titulo-v">CRÍTICA ESTRATÉGICA DE INVERSIÓN</p>', unsafe_allow_html=True)
+    st.caption("Valentina | Análisis Crítico de Mercados | Universidad Externado")
+
+    data = load_data_critical()
     if data.empty:
-        st.error("Error de conexión con los mercados. Por favor refresca.")
+        st.error("Error de conexión. Refresca la página.")
         st.stop()
 
     # SIDEBAR
     empresa = st.sidebar.selectbox("Seleccione Activo:", tickers)
-    monto = st.sidebar.number_input("Monto a Invertir (USD):", min_value=100, value=1000)
+    monto = st.sidebar.number_input("Capital a Invertir (USD):", min_value=100, value=1000)
     
-    # Cálculo de Retornos Diarios
+    # Cálculos Estadísticos Base
     rets = data[empresa].pct_change().dropna()
+    media = rets.mean()
+    mediana = rets.median()
+    moda = rets.round(4).mode()[0]
+    
+    # Métricas Críticas (Anualizadas)
+    rend_anual = media * 252
+    volatilidad = rets.std() * (252**0.5)
+    eficiencia = rend_anual / volatilidad  # Ratio de Sharpe simplificado
 
     # --- SECCIÓN: TENDENCIA CENTRAL ---
-    st.subheader(f"📊 Estadísticas de Retorno: {empresa}")
+    st.subheader("📋 Parámetros de Tendencia Central")
     c1, c2, c3 = st.columns(3)
-    
-    # Cálculos exactos
-    media_val = rets.mean()
-    mediana_val = rets.median()
-    # Moda: redondeamos a 4 decimales para encontrar el retorno más frecuente
-    moda_val = rets.round(4).mode()[0]
-
-    c1.metric("MEDIA (Promedio Diario)", f"{media_val:.4%}")
-    c2.metric("MEDIANA (Punto Medio)", f"{mediana_val:.4%}")
-    c3.metric("MODA (Valor más común)", f"{moda_val:.4%}")
+    c1.metric("MEDIA (Retorno Diario)", f"{media:.4%}")
+    c2.metric("MEDIANA (Punto de Equilibrio)", f"{mediana:.4%}")
+    c3.metric("MODA (Lo más frecuente)", f"{moda:.4%}")
 
     st.markdown("---")
 
-    # --- SECCIÓN: RECOMENDACIÓN GERENCIAL ---
-    st.subheader("🎯 Recomendación de Inversión")
+    # --- SECCIÓN: EL DICTAMEN CRÍTICO ---
+    st.header(f"⚖️ ¿Es bueno invertir en {empresa}?")
     
-    # Lógica: Relación Riesgo/Retorno (Sharpe Ratio simplificado)
-    volatilidad = rets.std()
-    rendimiento_anual = media_val * 252
-    riesgo_anual = volatilidad * (252**0.5)
-    
-    # Determinamos si es buena opción
-    score = rendimiento_anual / riesgo_anual # Ratio de eficiencia
-    
-    with st.container():
-        st.markdown('<div class="recomendacion-card">', unsafe_allow_html=True)
-        
-        if score > 0.6:
-            st.success(f"✅ **¡EXCELENTE OPCIÓN!** {empresa} tiene un crecimiento muy sólido frente a su riesgo.")
-            rec_texto = f"Con tus **${monto:,.2f} USD**, podrías esperar un crecimiento eficiente basado en su tendencia histórica de 10 años."
-        elif score > 0.4:
-            st.info(f"⚠️ **OPCIÓN MODERADA.** {empresa} es buena, pero tiene periodos de alta volatilidad.")
-            rec_texto = "Es apta si buscas crecimiento a largo plazo y no te asustan las caídas temporales."
-        else:
-            st.warning(f"❌ **OPCIÓN DE ALTO RIESGO.** {empresa} presenta demasiada inestabilidad actualmente.")
-            rec_texto = "Te recomendamos diversificar tus fondos o esperar a una fase de mercado más estable."
-            
-        st.write(rec_texto)
-        st.write(f"*Nota técnica: La volatilidad anualizada de este activo es del **{riesgo_anual:.2%}**.*")
-        st.markdown('</div>', unsafe_allow_html=True)
+    if eficiencia > 0.8:
+        color, juicio, icono = "#00ff88", "INVERSIÓN ALTAMENTE RECOMENDADA", "🚀"
+        razon = f"Este activo genera un excelente retorno por cada unidad de riesgo asumida. Su trayectoria de 10 años muestra que es una 'máquina de valor'."
+    elif eficiencia > 0.5:
+        color, juicio, icono = "#ffaa00", "INVERSIÓN DE RIESGO MODERADO", "⚖️"
+        razon = "El rendimiento es bueno, pero la volatilidad es considerable. Solo invierte si no necesitas este dinero en los próximos 2 años."
+    else:
+        color, juicio, icono = "#ff4b4b", "INVERSIÓN NO RECOMENDADA / ALTO RIESGO", "⚠️"
+        razon = "La volatilidad actual supera con creces el beneficio esperado. El comportamiento histórico sugiere que podrías enfrentar pérdidas graves antes de ver ganancias."
 
-    # --- GRÁFICAS MEJORADAS ---
-    t1, t2 = st.tabs(["🧬 Análisis de Distribución", "📈 Trayectoria de Precios"])
-    
-    with t1:
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.write("**Histograma (Frecuencia de Ganancias/Pérdidas)**")
-            fig_h = px.histogram(rets, nbins=100, color_discrete_sequence=['#d4af37'], marginal="box")
-            fig_h.update_layout(plot_bgcolor='#0e1117', paper_bgcolor='#0e1117', font_color="white")
-            st.plotly_chart(fig_h, use_container_width=True)
-        with col_b:
-            st.write("**Boxplot (Identificación de Riesgos Extremos)**")
-            fig_b = px.box(rets, orientation='h', color_discrete_sequence=['#ffffff'])
-            fig_b.update_layout(plot_bgcolor='#0e1117', paper_bgcolor='#0e1117', font_color="white")
-            st.plotly_chart(fig_b, use_container_width=True)
+    st.markdown(f"""
+        <div class="critica-card" style="border-color: {color}; background-color: {color}15;">
+            <h2 style="color: {color}; margin-top: 0;">{icono} {juicio}</h2>
+            <p><b>Análisis de Valentina:</b> {razon}</p>
+            <p>Con tus <b>${monto:,.2f} USD</b>, el riesgo estimado de pérdida en un día de pánico es de <b>{(rets.std()*2):.2%}</b>.</p>
+        </div>
+    """, unsafe_allow_html=True)
 
-    with t2:
-        fig_l = px.line(data, y=empresa, color_discrete_sequence=['#d4af37'], title=f"Precio Histórico de {empresa}")
-        fig_l.update_layout(plot_bgcolor='#0e1117', paper_bgcolor='#0e1117', font_color="white")
-        st.plotly_chart(fig_l, use_container_width=True)
-
-except Exception as e:
-    st.error(f"Error detectado: {e}")
+    # --- SECCIÓN: GRÁFICAS (BOXPLOT MEJORADO) ---
+    t1, t2
