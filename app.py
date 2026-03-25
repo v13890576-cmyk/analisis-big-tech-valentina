@@ -50,17 +50,22 @@ if data is not None and not data.empty:
                 </div>""", unsafe_allow_html=True)
         
         st.markdown("---")
-        # Gráfica de precios (Costo de las acciones)
-        st.subheader("📈 Evolución del Costo de las Acciones")
-        st.line_chart(data)
+        
+        # --- MEJORA: GRÁFICA DE PRECIOS INTERACTIVA (Plotly) ---
+        st.subheader("📈 Evolución Interactiva del Costo de las Acciones")
+        fig_precios = px.line(data, 
+                             labels={'value': 'Precio (USD)', 'Date': 'Fecha', 'variable': 'Empresa'},
+                             title="Histórico de Precios (Pasa el mouse para ver detalles)")
+        fig_precios.update_layout(plot_bgcolor='#1a1c24', paper_bgcolor='#0e1117', font_color='white', hovermode="x unified")
+        st.plotly_chart(fig_precios, use_container_width=True)
 
-        # Gráfica de Retornos con selector
         st.markdown("---")
+        # Gráfica de Retornos con selector
         emp_p = st.selectbox("Ver Retornos Diarios de:", data.columns)
         rets = data.pct_change().dropna()
-        fig = px.line(rets[emp_p], title=f"Volatilidad: {emp_p}", color_discrete_sequence=['#00ff64'])
-        fig.update_layout(plot_bgcolor='#1a1c24', paper_bgcolor='#0e1117', font_color='white')
-        st.plotly_chart(fig, use_container_width=True)
+        fig_rets = px.line(rets[emp_p], title=f"Volatilidad: {emp_p}", color_discrete_sequence=['#00ff64'])
+        fig_rets.update_layout(plot_bgcolor='#1a1c24', paper_bgcolor='#0e1117', font_color='white')
+        st.plotly_chart(fig_rets, use_container_width=True)
 
     with t2:
         # Estadísticas: Media, Mediana, Moda
@@ -80,10 +85,16 @@ if data is not None and not data.empty:
         st.subheader("💵 Calculadora de Inversión Proyectada")
         c_inv, c_res = st.columns([1, 2])
         with c_inv:
-            monto = st.number_input("Monto a invertir (USD):", value=2000)
+            monto = st.number_input("Monto a invertir (USD):", value=2019)
             emp_c = st.selectbox("Empresa para proyectar:", data.columns)
         with c_res:
             m = rets[emp_c].mean()
             r1, r2, r3 = st.columns(3)
             r1.metric("En 1 Día", f"${monto*(1+m):,.2f}")
             r2.metric("En 1 Mes", f"${monto*(1+m)**21:,.2f}")
+            r3.metric("En 1 Año", f"${monto*(1+m)**252:,.2f}")
+        
+        efi = (rets.mean() * 252) / (rets.std() * (252**0.5))
+        st.success(f"🏆 **Recomendación:** La mejor opción por eficiencia es **{efi.idxmax()}**.")
+else:
+    st.error("No se pudo conectar con los datos.")
