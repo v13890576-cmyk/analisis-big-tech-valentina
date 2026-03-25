@@ -2,86 +2,91 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime, timedelta
-import numpy as np
 
-# ==========================================
-# 1. ESTILO "CYBERPUNK GERENCIAL"
-# ==========================================
+# 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Big Tech Analytics - Valentina", layout="wide")
 
+# Estilo Negro y Dorado (Elegante)
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500&family=Inter:wght@400;600&display=swap');
-    
-    /* Fondo Negro y Tipografía Clara */
-    .stApp { background-color: #000000; color: #ffffff; font-family: 'Inter', sans-serif; }
-    
-    /* Título Futurista */
-    .titulo-v {
-        font-family: 'Orbitron', sans-serif;
-        color: #ffffff;
-        font-size: 38px;
-        text-align: center;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        border-bottom: 2px solid #333;
-        padding-bottom: 15px;
-        margin-bottom: 25px;
-    }
-    
-    /* Métricas */
-    [data-testid="stMetricValue"] { color: #00ff88 !important; font-size: 2rem !important; }
-    [data-testid="stMetricLabel"] { color: #aaaaaa !important; }
-    
-    /* Tarjetas oscuras */
-    .report-card {
-        background-color: #111111;
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid #333333;
-    }
-    
-    /* Inputs */
-    .stNumberInput>div>div>input { background-color: #1a1a1a; color: #fff; border: 1px solid #444; }
-    
-    /* Pestañas */
-    .stTabs [data-baseweb="tab-list"] { background-color: #111111; }
+    .stApp { background-color: #000000; color: #ffffff; }
+    .titulo-v { color: #d4af37; font-family: 'Serif'; font-size: 35px; text-align: center; font-weight: bold; border-bottom: 2px solid #333; padding-bottom: 10px; }
+    [data-testid="stMetricValue"] { color: #00ff88 !important; }
+    .report-card { background-color: #111111; padding: 15px; border-radius: 10px; border: 1px solid #333; }
     </style>
     """, unsafe_allow_html=True)
 
-# ==========================================
-# 2. DATOS VERÍDICOS DE YAHOO FINANCE
-# ==========================================
+# 2. CARGA DE DATOS CON "CACHÉ" (Para que no cargue cada vez que muevas algo)
 tickers = ['AAPL', 'MSFT', 'NVDA', 'META', 'AMZN']
 
-# Paleta de colores eléctricos por empresa
-colores_comp = {
-    'AAPL': '#f8f9fa', # Plata
-    'MSFT': '#00a4ef', # Azul Microsoft
-    'NVDA': '#76b900', # Verde Nvidia
-    'META': '#0081fb', # Azul Meta
-    'AMZN': '#ff9900'  # Naranja Amazon
-}
+@st.cache_data(ttl=3600) # Guarda los datos por 1 hora para que vuele
+def load_data():
+    end = datetime.now()
+    start = end - timedelta(days=10*365)
+    # Descarga optimizada
+    df = yf.download(tickers, start=start, end=end, progress=False, threads=False)
+    if not df.empty:
+        if 'Adj Close' in df.columns: df = df['Adj Close']
+        elif 'Close' in df.columns: df = df['Close']
+        if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(-1)
+    return df
 
-@st.cache_data(ttl=600)
-def load_data_veridico():
-    with st.spinner('Actualizando datos financieros reales...'):
-        end = datetime.now()
-        start = end - timedelta(days=10*365)
-        # Descarga con threads=False para estabilidad
-        df = yf.download(tickers, start=start, end=end, progress=False, threads=False)
+try:
+    st.markdown('<p class="titulo-v">ESTRATEGIA Y ESTADÍSTICA: BIG TECH</p>', unsafe_allow_html=True)
+    st.caption("Valentina | Universidad Externado de Colombia")
+
+    df_precios = load_data()
+
+    if df_precios.empty:
+        st.error("⌛ Yahoo Finance está tardando en responder. Refresca la página en 10 segundos.")
+        st.stop()
+
+    # --- SIDEBAR ---
+    st.sidebar.header("Configuración")
+    empresa = st.sidebar.selectbox("Seleccione Empresa:", tickers)
+    capital = st.sidebar.number_input("Inversión Inicial (USD):", value=1000)
+    
+    rets = df_precios[empresa].pct_change().dropna()
+
+    # --- MÓDULO DE RECOMENDACIÓN ---
+    st.subheader("🎯 Recomendación de Inversión")
+    col_rec1, col_rec2 = st.columns([1, 2])
+    
+    with col_rec1:
+        rend_anual = rets.mean() * 252 * 100
+        volatilidad = rets.std() * (252**0.5) * 100
+        st.markdown(f"""
+        <div class='report-card'>
+        <h4>Perfil: {empresa}</h4>
+        <p>Retorno Anual Esperado: <b>{rend_anual:.2f}%</b></p>
+        <p>Riesgo (Volatilidad): <b>{volatilidad:.2f}%</b></p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col_rec2:
+        if volatilidad > 40: rec = "Agresivo (Alta ganancia, alto riesgo)"
+        elif volatilidad > 25: rec = "Equilibrado"
+        else: rec = "Conservador"
         
-        if df.empty:
-            return pd.DataFrame()
-            
-        # Limpieza de columna Adj Close
-        if 'Adj Close' in df.columns:
-            df = df['Adj Close']
-        elif 'Close' in df.columns:
-            df = df['Close']
-        
-        # Aplanar MultiIndex
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level
+        st.success(f"Para tus **${capital:,.2f}**, {empresa} se clasifica como perfil **{rec}**.")
+
+    # --- ESTADÍSTICA ---
+    st.markdown("---")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("MEDIA (Diaria)", f"{rets.mean():.5%}")
+    c2.metric("MEDIANA", f"{rets.median():.5%}")
+    c3.metric("MODA", f"{rets.round(4).mode()[0]:.5%}")
+
+    # --- GRÁFICAS MEJORADAS ---
+    t1, t2 = st.tabs(["📊 Distribución (Histograma/Boxplot)", "📈 Trayectoria Histórica"])
+
+    with t1:
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            fig_h = px.histogram(rets, nbins=50, title="Histograma de Retornos", color_discrete_sequence=['#d4af37'])
+            fig_h.update_layout(plot_bgcolor='black', paper_bgcolor='black', font_color='white')
+            st.plotly_chart(fig_h, use_container_width=True)
+        with col_g2:
+            fig_b = px.box(rets, orientation='h', title="Diagrama de Caja (Riesgo)", color_discrete_sequence=['#ffffff'])
+            fig_b.update_layout(plot_bgcolor='black', paper_bgcolor='black', font_color='white')
