@@ -2,102 +2,100 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.express as px
+from datetime import datetime, timedelta
 
-# 1. ESTILO DE TARJETAS (DASHBOARD DARK)
-st.set_page_config(page_title="Valentina Analytics", layout="wide")
+# 1. CONFIGURACIÓN GENERAL Y ESTILO "DARK DASHBOARD"
+st.set_page_config(page_title="Dashboard Valentina", layout="wide")
+
 st.markdown("""
     <style>
+    /* Estilo para las tarjetas de KPI */
     .stApp { background-color: #0e1117; color: white; }
-    .metric-card {
-        background-color: #1a1c24; padding: 20px; border-radius: 10px;
-        border: 1px solid #30363d; text-align: center;
+    .kpi-container { display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 25px; }
+    .kpi-card {
+        background-color: #1a1c24;
+        padding: 20px 15px;
+        border-radius: 12px;
+        border: 1px solid #30363d;
+        flex: 1;
+        min-width: 150px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-    .metric-val { font-size: 22px; font-weight: bold; margin: 5px 0; }
-    .delta-up { color: #00ff00; font-size: 14px; }
-    .delta-down { color: #ff4b4b; font-size: 14px; }
+    .kpi-card div:first-child { color: #8b949e; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; }
+    .kpi-card div:nth-child(2) { color: #8b949e; font-size: 13px; margin-bottom: 5px; }
+    /* MEJORA: Precio completo en una sola línea */
+    .kpi-card div:nth-child(3) { 
+        color: white; 
+        font-size: 26px; /* Ajuste ligero de tamaño para legibilidad */
+        font-weight: bold; 
+        margin: 5px 0; 
+        white-space: nowrap; /* Evita que el número se corte */
+        overflow: hidden;
+        text-overflow: ellipsis; /* Pone '...' si no cabe, pero ahora cabe */
+    }
+    .kpi-val { font-size: 14px; border-radius: 5px; padding: 2px 8px; font-weight: bold;}
+    .delta-up { background-color: rgba(0,255,100,0.1); color: #00ff64; }
+    .delta-down { background-color: rgba(255,50,50,0.1); color: #ff3232; }
     </style>
     """, unsafe_allow_html=True)
 
+# 2. CARGA DE DATOS (10 AÑOS - VERÍDICO)
 @st.cache_data(ttl=600)
 def load_data():
     t = ['AAPL', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NVDA', 'TSLA']
-    d = yf.download(t, period="10y", progress=False)
-    return d['Close'] if 'Close' in d.columns else d['Adj Close']
+    try:
+        # Descarga de datos
+        df = yf.download(t, period="10y", progress=False)
+        return df['Close'] if 'Close' in df.columns else df['Adj Close']
+    except Exception as e:
+        return pd.DataFrame() # Retorna DF vacío en caso de error
 
 data = load_data()
 
-if data is not None:
-    st.title("🏛️ Monitor de Inteligencia Financiera")
-    st.caption("Valentina | Facultad de Administración | Universidad Externado")
+# Lógica principal solo si hay datos
+if not data.empty:
+    st.markdown('<p style="color:white; font-size:32px; font-weight:bold; margin-bottom:20px;">Precios Actuales y Rendimiento</p>', unsafe_allow_html=True)
 
-    # CREACIÓN DE PESTAÑAS
-    tab1, tab2 = st.tabs(["💰 Desempeño y Costos", "📈 Análisis Estadístico"])
+    # Obtenemos los últimos datos y los de hace un año (simulación YTD)
+    try:
+        current_data = data.iloc[-1]
+        last_year_data = data.iloc[-252] # Datos de aprox. 1 año atrás
+    except IndexError:
+        st.error("⌛ Yahoo Finance no responde. Refresca la página en un minuto.")
+        st.stop()
 
-    with tab1:
-        # TARJETAS DE PRECIOS (COMO TU IMAGEN)
-        st.subheader("Precios Actuales y Rendimiento")
-        cols = st.columns(len(data.columns))
-        h, a = data.iloc[-1], data.iloc[0]
+    # --- PESTAÑA PRINCIPAL: DASHBOARD ---
+    st.subheader("🏢 Desempeño y Costos (Costo de las Acciones)")
+    
+    # 3. GENERACIÓN DE TARJETAS KPI (ESTILO REFERENCIA PERO MEJORADO)
+    cols_kpi = st.columns(len(data.columns))
+    
+    for i, col in enumerate(cols_kpi):
+        ticker = data.columns[i]
+        price = current_data[ticker]
         
-        for i, col in enumerate(cols):
-            ticker = data.columns[i]
-            pct = ((h[ticker] - data.iloc[-252][ticker]) / data.iloc[-252][ticker]) * 100
-            clase = "delta-up" if pct > 0 else "delta-down"
-            with col:
-                st.markdown(f"""<div class="metric-card">
-                    <div style="color:gray; font-size:12px;">{ticker}</div>
-                    <div class="metric-val">${h[ticker]:.2f}</div>
-                    <div class="{clase}">{'↑' if pct > 0 else '↓'} {abs(pct):.1f}% YTD</div>
-                </div>""", unsafe_allow_html=True)
-
-        st.markdown("---")
-        st.subheader("📈 Evolución del Costo de las Acciones (USD)")
-        st.line_chart(data)
+        # Rendimiento simulado YTD (cambio vs año anterior)
+        change_ytd = ((price - last_year_data[ticker]) / last_year_data[ticker]) * 100
+        change_day = ((price - data.iloc[-2][ticker]) / data.iloc[-2][ticker]) * 100
         
-        # MEJOR OPCIÓN
-        rets = data.pct_change().dropna()
-        efi = (rets.mean() * 252) / (rets.std() * (252**0.5))
-        st.success(f"🏆 **DICTAMEN CRÍTICO:** La mejor opción para invertir es **{efi.idxmax()}**.")
-
-    with tab2:
-        st.sidebar.header("Filtros de Análisis")
-        emp = st.sidebar.selectbox("Acción a Detallar:", data.columns)
-        monto = st.sidebar.number_input("Capital a Invertir (USD):", value=1000)
-        r_e = rets[emp]
-
-        st.header(f"Análisis Estadístico: {emp}")
-
-        # CALCULADORA DE RETORNO (CUANTA PLATA SE DEVUELVE)
-        retorno_esperado = monto * (1 + r_e.mean())
-        ganancia_neta = retorno_esperado - monto
+        # Colores
+        class_ytd = "delta-up" if change_ytd > 0 else "delta-down"
+        icon_ytd = "↑" if change_ytd > 0 else "↓"
+        class_day = "color: #00ff64;" if change_day > 0 else "color: #ff3232;"
+        icon_day = "↑" if change_day > 0 else "↓"
         
-        st.subheader("💵 Proyección de Retorno")
-        c1, c2 = st.columns(2)
-        c1.metric("Monto Total Estimado", f"${retorno_esperado:,.2f}", f"{r_e.mean():.4%} esperado")
-        c2.metric("Ganancia Neta Estimada", f"${ganancia_neta:,.2f}")
+        with col:
+            # HTML para la tarjeta KPI
+            st.markdown(f"""
+                <div class="kpi-card">
+                    <div>{ticker}</div>
+                    <div style="{class_day}">{icon_day} {abs(change_day):.2f}%</div>
+                    <div>${price:,.2f}</div> <span class="kpi-val {class_ytd}">{icon_ytd} {abs(change_ytd):.1f}% YTD</span>
+                </div>
+            """, unsafe_allow_html=True)
 
-        # TABLA DE MEDIA, MEDIANA Y MODA (BONITA)
-        st.subheader("🎯 Medidas de Tendencia Central")
-        stats_df = pd.DataFrame({
-            "Métrica": ["Media (Promedio)", "Mediana (Centro)", "Moda (Frecuente)"],
-            "Valor": [f"{r_e.mean():.4%}", f"{r_e.median():.4%}", f"{r_e.round(4).mode()[0]:.4%}"],
-            "Nota": ["Retorno diario esperado", "Punto medio de datos", "Valor más repetido"]
-        })
-        st.table(stats_df)
+    # Visualización de Costo Histórico
+    st.line_chart(data)
 
-        # GRÁFICA DE RETORNOS
-        st.subheader(f"🧬 Volatilidad de Retornos: {emp}")
-        fig = px.line(r_e, labels={'value': 'Cambio %', 'Date': 'Fecha'}, color_discrete_sequence=['#d4af37'])
-        fig.update_layout(plot_bgcolor='#0e1117', paper_bgcolor='#0e1117', font_color='white')
-        st.plotly_chart(fig, use_container_width=True)
-
-        # TABLA DE FRECUENCIAS
-        st.subheader("📊 Distribución de Frecuencias")
-        b = [-1, -0.02, -0.005, 0.005, 0.02, 1]
-        lab = ["Caída", "Baja", "Estable", "Subida", "Salto"]
-        fr = pd.cut(r_e, bins=b, labels=lab).value_counts().reset_index()
-        fr.columns = ['Estado de Mercado', 'Días Registrados']
-        st.table(fr)
-
-else:
-    st.error("Error al cargar datos. Refresca la página.")
+    # Dictamen
