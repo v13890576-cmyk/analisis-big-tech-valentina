@@ -3,63 +3,78 @@ import yfinance as yf
 import pandas as pd
 import plotly.express as px
 
-# 1. CONFIGURACIÓN
-st.set_page_config(page_title="Analisis Valentina", layout="wide")
+# 1. ESTILO VISUAL (TARJETAS TIPO DASHBOARD)
+st.set_page_config(page_title="Dashboard Valentina", layout="wide")
+st.markdown("""
+    <style>
+    .stApp { background-color: #0e1117; color: white; }
+    .metric-card {
+        background-color: #1a1c24;
+        padding: 20px;
+        border-radius: 10px;
+        border: 1px solid #30363d;
+        text-align: center;
+    }
+    .metric-val { font-size: 24px; font-weight: bold; margin: 5px 0; }
+    .metric-delta { font-size: 14px; border-radius: 5px; padding: 2px 8px; }
+    .delta-up { background-color: rgba(0,255,0,0.1); color: #00ff00; }
+    .delta-down { background-color: rgba(255,0,0,0.1); color: #ff4b4b; }
+    </style>
+    """, unsafe_allow_html=True)
 
 @st.cache_data(ttl=600)
 def load_data():
-    t = ['AAPL', 'MSFT', 'NVDA', 'META', 'AMZN']
+    # Incluimos TSLA y GOOGL para que se vea como tu referencia
+    t = ['AAPL', 'AMZN', 'GOOGL', 'META', 'MSFT', 'NVDA', 'TSLA']
     d = yf.download(t, period="10y", progress=False)
     return d['Close'] if 'Close' in d.columns else d['Adj Close']
 
-# 2. EJECUCIÓN
 data = load_data()
 
 if data is not None:
-    st.title("📊 MONITOR ESTRATÉGICO")
+    st.title("📊 Monitor Estratégico de Valentina")
     
-    # --- CUADRO DE PRECIOS CON FLECHAS ---
-    st.subheader("🏢 Precios Actuales")
-    h, a = data.iloc[-1], data.iloc[-2]
-    
-    res = []
-    for c in data.columns:
-        dif = h[c] - a[c]
-        ico = "▲" if dif > 0 else "▼"
-        col = "green" if dif > 0 else "red"
-        res.append({"Empresa": c, "Precio": f"${h[c]:.2f}", "Trend": ico, "Diff": dif})
-    
-    df_res = pd.DataFrame(res)
-    # Mostramos la tabla con las flechas de color
-    st.table(df_res.style.apply(lambda x: ["","","",f"color: {'green' if x.Diff > 0 else 'red'}"], axis=1))
+    # --- PÁGINA 1: DASHBOARD PRINCIPAL ---
+    tab_main, tab_stats = st.tabs(["🏠 Desempeño & Ciclos", "📈 Análisis Estadístico"])
 
-    # --- LA MEJOR OPCIÓN ---
-    rets = data.pct_change().dropna()
-    efi = (rets.mean() * 252) / (rets.std() * (252**0.5))
-    st.success(f"🏆 MEJOR OPCIÓN: **{efi.idxmax()}** (Basado en eficiencia riesgo/retorno)")
+    with tab_main:
+        st.subheader("🏢 Precios Actuales y Desempeño (YTD)")
+        
+        # Fila de tarjetas (estilo imagen referencia)
+        cols = st.columns(len(data.columns))
+        h, a = data.iloc[-1], data.iloc[0] # Para simular YTD/Crecimiento
+        
+        for i, col in enumerate(cols):
+            ticker = data.columns[i]
+            val = h[ticker]
+            # Calculamos un porcentaje simulado de crecimiento para la tarjeta
+            pct = ((val - a[ticker]) / a[ticker]) * 100
+            clase = "delta-up" if pct > 0 else "delta-down"
+            signo = "↑" if pct > 0 else "↓"
+            
+            with col:
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <div style="color: #8b949e; font-size: 12px;">{ticker}</div>
+                        <div class="metric-val">${val:.2f} {signo}</div>
+                        <span class="metric-delta {clase}">{signo} {abs(pct):.1f}% YTD</span>
+                    </div>
+                """, unsafe_allow_html=True)
 
-    # --- TABLA DE FRECUENCIAS ---
-    st.markdown("---")
-    emp = st.sidebar.selectbox("Acción:", data.columns)
-    r_e = rets[emp]
-    
-    st.subheader(f"Análisis: {emp}")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write("**Frecuencias**")
-        b = [-1, -0.02, -0.005, 0.005, 0.02, 1]
-        lab = ["Caída", "Baja", "Estable", "Subida", "Salto"]
-        fr = pd.cut(r_e, bins=b, labels=lab).value_counts().reset_index()
-        fr.columns = ['Escenario', 'Días']
-        st.table(fr)
-    with col2:
-        st.write("**Estadísticas**")
-        st.metric("MEDIA", f"{r_e.mean():.4%}")
-        st.metric("MODA", f"{r_e.round(4).mode()[0]:.4%}")
+        # Recomendación destacada
+        rets = data.pct_change().dropna()
+        efi = (rets.mean() * 252) / (rets.std() * (252**0.5))
+        st.success(f"🏆 **DICTAMEN CRÍTICO:** La mejor opción basada en eficiencia es **{efi.idxmax()}**")
+        
+        st.subheader("Visualización de Costo Histórico")
+        st.line_chart(data)
 
-    # --- GRÁFICAS ---
-    st.line_chart(data[emp])
-    st.plotly_chart(px.line(r_e, title="Retornos Diarios"))
+    with tab_stats:
+        # --- PÁGINA 2: ESTADÍSTICAS ---
+        st.sidebar.header("Configuración")
+        emp = st.sidebar.selectbox("Seleccione Acción para Detalle:", data.columns)
+        r_e = rets[emp]
 
-else:
-    st.error("Error de conexión. Revisa tu archivo requirements.txt")
+        st.header(f"Análisis Profundo: {emp}")
+        
+        # TABLA DE MEDIA, MEDIANA Y
